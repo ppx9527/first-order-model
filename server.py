@@ -47,8 +47,7 @@ def generated(image, video, g):
     source_image = imageio.imread(image)
     reader = imageio.get_reader(video)
 
-    #Resize image and video to 256x256
-
+    # Resize image and video to 256x256
     source_image = resize(source_image, (256, 256))[..., :3]
 
     fps = reader.get_meta_data()['fps']
@@ -69,6 +68,10 @@ def generated(image, video, g):
     predictions = make_animation(source_image, driving_video, generator, kp_detector, relative=True)
 
     imageio.mimsave(g, [img_as_ubyte(frame) for frame in predictions], fps=fps)
+
+
+def crop_video():
+    pass
 
 
 @app.route('/getResult', methods=['GET', 'POST'])
