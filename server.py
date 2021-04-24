@@ -6,7 +6,8 @@ from skimage.transform import resize
 from skimage import img_as_ubyte
 import os
 import filetype
-from demo import load_checkpoints, make_animation
+from use_model import load_checkpoints, make_animation
+from crop_source import CropSource
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -44,22 +45,11 @@ def upload():
 
 
 def generated(image, video, g):
-    source_image = imageio.imread(image)
-    reader = imageio.get_reader(video)
+    source_image = CropSource(image).crop_image()
+    driving_video, fps = CropSource(video).crop_video()
 
     # Resize image and video to 256x256
     source_image = resize(source_image, (256, 256))[..., :3]
-
-    fps = reader.get_meta_data()['fps']
-    driving_video = []
-    try:
-        for im in reader:
-            driving_video.append(im)
-    except RuntimeError:
-        pass
-    reader.close()
-
-    driving_video = [resize(frame, (256, 256))[..., :3] for frame in driving_video]
 
     generator, kp_detector = load_checkpoints(
         config_path='config/vox-256.yaml',
@@ -68,10 +58,6 @@ def generated(image, video, g):
     predictions = make_animation(source_image, driving_video, generator, kp_detector, relative=True)
 
     imageio.mimsave(g, [img_as_ubyte(frame) for frame in predictions], fps=fps)
-
-
-def crop_video():
-    pass
 
 
 @app.route('/getResult', methods=['GET', 'POST'])

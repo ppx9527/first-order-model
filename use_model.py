@@ -1,5 +1,4 @@
 import matplotlib
-matplotlib.use('Agg')
 import sys
 import yaml
 from tqdm import tqdm
@@ -11,7 +10,6 @@ from sync_batchnorm import DataParallelWithCallback
 from modules.generator import OcclusionAwareGenerator
 from modules.keypoint_detector import KPDetector
 from animate import normalize_kp
-from scipy.spatial import ConvexHull
 
 
 if sys.version_info[0] < 3:
@@ -32,22 +30,22 @@ def load_checkpoints(config_path, checkpoint_path, cpu=False):
                              **config['model_params']['common_params'])
     if not cpu:
         kp_detector.cuda()
-    
+
     if cpu:
         checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
     else:
         checkpoint = torch.load(checkpoint_path)
- 
+
     generator.load_state_dict(checkpoint['generator'])
     kp_detector.load_state_dict(checkpoint['kp_detector'])
-    
+
     if not cpu:
         generator = DataParallelWithCallback(generator)
         kp_detector = DataParallelWithCallback(kp_detector)
 
     generator.eval()
     kp_detector.eval()
-    
+
     return generator, kp_detector
 
 
@@ -73,29 +71,3 @@ def make_animation(source_image, driving_video, generator, kp_detector, relative
 
             predictions.append(np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0])
     return predictions
-
-
-def find_best_frame(source, driving, cpu=False):
-    import face_alignment
-
-    def normalize_kp(kp):
-        kp = kp - kp.mean(axis=0, keepdims=True)
-        area = ConvexHull(kp[:, :2]).volume
-        area = np.sqrt(area)
-        kp[:, :2] = kp[:, :2] / area
-        return kp
-
-    fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, flip_input=True,
-                                      device='cpu' if cpu else 'cuda')
-    kp_source = fa.get_landmarks(255 * source)[0]
-    kp_source = normalize_kp(kp_source)
-    norm  = float('inf')
-    frame_num = 0
-    for i, image in tqdm(enumerate(driving)):
-        kp_driving = fa.get_landmarks(255 * image)[0]
-        kp_driving = normalize_kp(kp_driving)
-        new_norm = (np.abs(kp_source - kp_driving) ** 2).sum()
-        if new_norm < norm:
-            norm = new_norm
-            frame_num = i
-    return frame_num
