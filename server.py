@@ -1,13 +1,13 @@
 from flask import Flask, request, send_from_directory, make_response
 from flask_cors import CORS
+from crop_source import CropSource
+from use_model import load_checkpoints, make_animation
 
 import imageio
 from skimage.transform import resize
 from skimage import img_as_ubyte
 import os
 import filetype
-from use_model import load_checkpoints, make_animation
-from crop_source import CropSource
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -26,7 +26,11 @@ def allowed_file(filename, allowed):
 def upload():
     if request.method == 'POST':
         file = request.files['file']
-        token = request.cookies.get('token')
+        try:
+            token = request.args.getlist('token')[0]
+        except IndexError:
+            token = 0
+
         if file is not None and token is not None:
             if allowed_file(file.filename, ['png', 'jpg']):
                 image = './temp/' + token + '-' + file.filename
@@ -48,15 +52,18 @@ def generated(image, video, g):
     source_image = CropSource(image).crop_image()
     driving_video, fps = CropSource(video).crop_video()
 
-    # Resize image and video to 256x256
+    # 将图片的尺寸调整为256x256，并且将alpha通道移出
     source_image = resize(source_image, (256, 256))[..., :3]
 
+    # 加载生成器和权重
     generator, kp_detector = load_checkpoints(
         config_path='config/vox-256.yaml',
         checkpoint_path='checkpoint/vox-cpk.pth.tar')
 
+    # 前向计算
     predictions = make_animation(source_image, driving_video, generator, kp_detector, relative=True)
 
+    # 保存视频
     imageio.mimsave(g, [img_as_ubyte(frame) for frame in predictions], fps=fps)
 
 
@@ -64,7 +71,10 @@ def generated(image, video, g):
 def get_result():
     if request.method == 'GET':
         source = {}
-        token = request.cookies.get('token')
+        try:
+            token = request.args.getlist('token')[0]
+        except IndexError:
+            token = 0
 
         for root, dirs, files in os.walk('./temp'):
             for file in files:

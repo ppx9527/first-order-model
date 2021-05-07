@@ -1,4 +1,3 @@
-import matplotlib
 import sys
 import yaml
 from tqdm import tqdm
